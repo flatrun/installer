@@ -1,0 +1,24 @@
+[Unit]
+Description=FlatRun Agent
+Documentation=https://github.com/flatrun/agent
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/opt/flatrun/bin/flatrun-agent --config /etc/flatrun/config.yml
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=flatrun-agent
+
+Environment=HOME=/root
+
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

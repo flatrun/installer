@@ -1,0 +1,67 @@
+#cloud-config
+
+package_update: false
+package_upgrade: false
+
+runcmd:
+  - |
+    # Detect cloud provider and get public IP
+    CLOUD_PROVIDER=""
+    PUBLIC_IP=""
+
+    # Try DigitalOcean
+    if curl -s --connect-timeout 2 http://169.254.169.254/metadata/v1/id > /dev/null 2>&1; then
+      CLOUD_PROVIDER="digitalocean"
+      PUBLIC_IP=$(curl -s http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address)
+    # Try AWS
+    elif curl -s --connect-timeout 2 http://169.254.169.254/latest/meta-data/instance-id > /dev/null 2>&1; then
+      CLOUD_PROVIDER="aws"
+      PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+    # Try GCP
+    elif curl -s --connect-timeout 2 -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/id > /dev/null 2>&1; then
+      CLOUD_PROVIDER="gcp"
+      PUBLIC_IP=$(curl -s -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip)
+    # Fallback
+    else
+      PUBLIC_IP=$(curl -s https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
+    fi
+
+    echo "CLOUD_PROVIDER=$CLOUD_PROVIDER" >> /etc/flatrun/environment
+    echo "PUBLIC_IP=$PUBLIC_IP" >> /etc/flatrun/environment
+
+  - |
+    # Regenerate SSH host keys
+    rm -f /etc/ssh/ssh_host_*
+    dpkg-reconfigure openssh-server
+
+  - |
+    # Regenerate machine-id
+    systemd-machine-id-setup
+
+  - |
+    # Create Docker networks if they don't exist
+    docker network create proxy 2>/dev/null || true
+    docker network create database 2>/dev/null || true
+
+  - |
+    # Start UI container
+    docker compose -f /opt/flatrun/deployments/ui/docker-compose.yml up -d
+
+  - |
+    # Start FlatRun Agent
+    systemctl start flatrun-agent
+
+  - |
+    # Deploy nginx infrastructure (needs agent to be healthy)
+    retries=30
+    for i in $(seq 1 $retries); do
+      if curl -sf http://localhost:8090/api/health > /dev/null 2>&1; then
+        flatrun-agent setup infra nginx --config /etc/flatrun/config.yml
+        break
+      fi
+      sleep 1
+    done
+
+final_message: |
+  FlatRun is ready!
+  Complete setup at: http://$PUBLIC_IP:8080/setup
