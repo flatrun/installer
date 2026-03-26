@@ -1,8 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/lib.sh"
+INSTALLER_BASE_URL="${INSTALLER_BASE_URL:-https://raw.githubusercontent.com/flatrun/installer/main/scripts}"
+
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    source "$SCRIPT_DIR/lib.sh"
+else
+    LIB_CONTENT="$(curl -fsSL "$INSTALLER_BASE_URL/lib.sh")"
+    eval "$LIB_CONTENT"
+fi
 
 FLATRUN_VERSION="${FLATRUN_VERSION:-latest}"
 AGENT_REPO="flatrun/agent"
