@@ -13,7 +13,6 @@ fi
 
 FLATRUN_VERSION="${FLATRUN_VERSION:-latest}"
 AGENT_REPO="flatrun/agent"
-UI_REPO="flatrun/ui"
 
 check_os() {
     if ! command -v apt-get &> /dev/null; then
@@ -25,7 +24,7 @@ check_os() {
 install_dependencies() {
     log "Installing dependencies..."
     apt-get update -qq
-    apt-get install -y -qq curl jq unzip
+    apt-get install -y -qq curl jq
 }
 
 get_version() {
@@ -71,40 +70,9 @@ download_agent() {
     rm -rf "$tmp_dir"
 }
 
-download_ui() {
-    log "Downloading FlatRun UI..."
-    local ui_version
-    ui_version=$(curl -sL "https://api.github.com/repos/$UI_REPO/releases/latest" | jq -r '.tag_name' | sed 's/^v//')
-    if [ -z "$ui_version" ] || [ "$ui_version" = "null" ]; then
-        log_error "Could not determine latest UI version"
-        exit 1
-    fi
-    log "UI version: v$ui_version"
-
-    local ui_dir="$DEPLOYMENTS_DIR/ui"
-    mkdir -p "$ui_dir/html"
-
-    local url="https://github.com/$UI_REPO/releases/download/v$ui_version/flatrun-ui-v${ui_version}.zip"
-    local tmp_dir
-    tmp_dir=$(mktemp -d)
-
-    if ! curl -fsSL "$url" -o "$tmp_dir/ui.zip"; then
-        log_error "Failed to download UI bundle"
-        rm -rf "$tmp_dir"
-        exit 1
-    fi
-
-    unzip -qo "$tmp_dir/ui.zip" -d "$tmp_dir/ui"
-
-    if [ -d "$tmp_dir/ui/dist" ]; then
-        cp -r "$tmp_dir/ui/dist"/* "$ui_dir/html/"
-    else
-        cp -r "$tmp_dir/ui"/* "$ui_dir/html/"
-    fi
-    rm -rf "$tmp_dir"
-
+setup_ui() {
+    log "Deploying FlatRun UI..."
     deploy_ui
-
     echo "$FLATRUN_VERSION" > "$INSTALL_DIR/version"
 }
 
@@ -146,7 +114,7 @@ main() {
     create_directories
     stop_existing
     download_agent
-    download_ui
+    setup_ui
     create_config
     create_docker_networks
     configure_systemd
