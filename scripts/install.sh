@@ -70,7 +70,7 @@ download_agent() {
     rm -rf "$tmp_dir"
 }
 
-download_ui() {
+setup_ui() {
     log "Deploying FlatRun UI..."
     deploy_ui
     echo "$FLATRUN_VERSION" > "$INSTALL_DIR/version"
@@ -114,7 +114,7 @@ main() {
     create_directories
     stop_existing
     download_agent
-    download_ui
+    setup_ui
     create_config
     create_docker_networks
     configure_systemd
