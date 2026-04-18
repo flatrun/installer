@@ -79,37 +79,30 @@ build_agent() {
 }
 
 build_ui() {
-    log "Building FlatRun UI..."
+    log "Building FlatRun UI image..."
     cd "$UI_DIR"
 
-    if [ ! -f "package.json" ]; then
-        log_error "package.json not found in $UI_DIR"
+    if [ ! -f "Dockerfile" ]; then
+        log_error "Dockerfile not found in $UI_DIR"
         exit 1
     fi
 
-    [ ! -d "node_modules" ] && npm install
-    npm run build
+    docker build -t flatrun-ui:dev .
 
-    if [ ! -d "dist" ]; then
-        log_error "UI build failed - dist directory not found"
-        exit 1
-    fi
-
-    log "UI built successfully"
+    log "UI image built: flatrun-ui:dev"
 }
 
 # --- Install from pre-built artifacts ---
 
 install_from_builds() {
     local agent_binary="${BUILDS_DIR}/flatrun-agent"
-    local ui_dist="${BUILDS_DIR}/ui-dist"
 
     if [ ! -f "$agent_binary" ]; then
         log_error "Agent binary not found at $agent_binary"
         echo ""
         log_error "Place pre-built artifacts in installer/builds/:"
         log_error "  cd agent && GOOS=linux GOARCH=amd64 go build -o ../installer/builds/flatrun-agent ./cmd/agent"
-        log_error "  cd ui && npm run build && cp -r dist ../installer/builds/ui-dist  (optional)"
+        log_error "To test a local UI build, set FLATRUN_UI_IMAGE=<image:tag> before running."
         exit 1
     fi
 
@@ -118,15 +111,8 @@ install_from_builds() {
     chmod +x "$INSTALL_DIR/bin/flatrun-agent"
     ln -sf "$INSTALL_DIR/bin/flatrun-agent" /usr/local/bin/flatrun-agent
 
-    if [ -d "$ui_dist" ] && [ -f "$ui_dist/index.html" ]; then
-        log "Deploying dashboard UI..."
-        local ui_dir="$DEPLOYMENTS_DIR/ui"
-        mkdir -p "$ui_dir/html"
-        cp -r "$ui_dist"/* "$ui_dir/html/"
-        deploy_ui
-    else
-        log_warn "Dashboard UI not found at $ui_dist (skipping)"
-    fi
+    log "Deploying dashboard UI..."
+    deploy_ui
 }
 
 # --- Install from source ---
@@ -138,7 +124,7 @@ install_from_source() {
     ln -sf "$INSTALL_DIR/bin/flatrun-agent" /usr/local/bin/flatrun-agent
 
     log "Deploying dashboard UI..."
-    deploy_ui "$UI_DIR/dist"
+    FLATRUN_UI_IMAGE="flatrun-ui:dev" deploy_ui
 }
 
 # --- Run modes ---

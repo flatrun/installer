@@ -152,54 +152,34 @@ deploy_infrastructure() {
 
 deploy_ui() {
     local ui_dir="$DEPLOYMENTS_DIR/ui"
-    local html_src="${1:-$ui_dir/html}"
+    local image="${FLATRUN_UI_IMAGE:-}"
 
-    mkdir -p "$ui_dir/html"
-
-    if [ "$html_src" != "$ui_dir/html" ] && [ -d "$html_src" ]; then
-        cp -r "$html_src"/* "$ui_dir/html/"
+    if [ -z "$image" ]; then
+        local tag="${FLATRUN_VERSION:-latest}"
+        if [ "$tag" != "latest" ] && ! docker manifest inspect "ghcr.io/flatrun/ui:${tag}" &>/dev/null; then
+            log_warn "UI image tag ${tag} not published, falling back to :latest"
+            tag="latest"
+        fi
+        image="ghcr.io/flatrun/ui:${tag}"
     fi
 
-    cat > "$ui_dir/nginx.conf" << 'NGINXCONF'
-server {
-    listen 80;
-    server_name _;
-    root /usr/share/nginx/html;
-    index index.html;
+    mkdir -p "$ui_dir"
 
-    location /api {
-        proxy_pass http://host.docker.internal:8090;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 3600s;
-    }
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
-NGINXCONF
-
-    cat > "$ui_dir/docker-compose.yml" << 'COMPOSE'
+    cat > "$ui_dir/docker-compose.yml" << COMPOSE
 name: ui
 services:
   ui:
-    image: nginx:alpine
+    image: ${image}
     container_name: flatrun-ui
     restart: unless-stopped
+    pull_policy: always
     ports:
       - "8080:80"
-    volumes:
-      - ./html:/usr/share/nginx/html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 COMPOSE
 
-    log "Starting UI container..."
+    log "Starting UI container (${image})..."
     docker compose -f "$ui_dir/docker-compose.yml" up -d
 }
 
