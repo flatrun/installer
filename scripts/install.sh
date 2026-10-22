@@ -110,6 +110,7 @@ main() {
     check_os
     install_dependencies
     install_docker
+    install_railpack
     get_version
     create_directories
     stop_existing

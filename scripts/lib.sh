@@ -71,6 +71,22 @@ EOF
     log "Docker installed successfully"
 }
 
+# Railpack builds repositories that have neither a compose file nor a
+# Dockerfile. A failed install is not fatal: those builds report it instead.
+install_railpack() {
+    if command -v railpack &> /dev/null; then
+        log "Railpack is already installed"
+        return 0
+    fi
+
+    log "Installing Railpack..."
+    if curl -fsSL https://railpack.com/install.sh | RAILPACK_BIN_DIR=/usr/local/bin sh; then
+        log "Railpack installed successfully"
+    else
+        log_warn "Railpack could not be installed; deploying repositories without a Dockerfile will not work until it is"
+    fi
+}
+
 create_directories() {
     log "Creating directories..."
     mkdir -p "$INSTALL_DIR"/bin
