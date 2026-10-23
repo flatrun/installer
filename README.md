@@ -28,19 +28,19 @@ scripts/
 Install FlatRun on any Ubuntu/Debian server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/flatrun/installer/main/scripts/install.sh | sudo bash
+curl -fsSL https://get.flatrun.dev/install.sh | sudo bash
 ```
 
 With a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/flatrun/installer/main/scripts/install.sh | sudo FLATRUN_VERSION=0.4.0-beta.11 bash
+curl -fsSL https://get.flatrun.dev/install.sh | sudo FLATRUN_VERSION=0.4.0-beta.11 bash
 ```
 
 Without a version it installs the newest beta. For the newest stable release instead:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/flatrun/installer/main/scripts/install.sh | sudo FLATRUN_CHANNEL=stable bash
+curl -fsSL https://get.flatrun.dev/install.sh | sudo FLATRUN_CHANNEL=stable bash
 ```
 
 Run `tests/pick-version.sh` after changing how the version is picked.
@@ -157,7 +157,7 @@ Provisioning scripts are shared across all platforms.
 ## Uninstall
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/flatrun/installer/main/scripts/uninstall.sh | sudo bash
+curl -fsSL https://get.flatrun.dev/uninstall.sh | sudo bash
 ```
 
 Or manually:
@@ -170,6 +170,10 @@ sudo rm -rf /opt/flatrun /etc/flatrun
 sudo rm /etc/systemd/system/flatrun-agent.service
 sudo systemctl daemon-reload
 ```
+
+## Releasing
+
+Pushing a `v*` tag runs the checks and publishes a release with `install.sh`, `lib.sh` and `uninstall.sh` attached. `get.flatrun.dev/<file>` redirects to `github.com/flatrun/installer/releases/latest/download/<file>`, so the install command serves the newest release without any change on the domain.
 
 ## Troubleshooting
 

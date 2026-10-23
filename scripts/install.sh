@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-INSTALLER_BASE_URL="${INSTALLER_BASE_URL:-https://raw.githubusercontent.com/flatrun/installer/main/scripts}"
+INSTALLER_BASE_URL="${INSTALLER_BASE_URL:-https://get.flatrun.dev}"
 
 if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
