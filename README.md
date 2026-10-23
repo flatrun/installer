@@ -175,8 +175,6 @@ sudo systemctl daemon-reload
 
 Pushing a `v*` tag runs the checks and publishes a release with `install.sh`, `lib.sh` and `uninstall.sh` attached. `get.flatrun.dev/<file>` redirects to `github.com/flatrun/installer/releases/latest/download/<file>`, so the install command serves the newest release without any change on the domain.
 
-The redirect is a Cloudflare Worker in `get/`. Deploy changes to it with `npx wrangler deploy` from that directory.
-
 ## Troubleshooting
 
 ```bash
