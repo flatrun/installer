@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2034 # read by lib.sh
 LOG_PREFIX="FlatRun Dev"
 source "$SCRIPT_DIR/lib.sh"
 
