@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # get.flatrun.dev redirects to the latest release's assets, so these
+      # file names are the public install URLs.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            scripts/install.sh scripts/lib.sh scripts/uninstall.sh \
+            --title "Installer ${GITHUB_REF_NAME#v}" \
+            --generate-notes
