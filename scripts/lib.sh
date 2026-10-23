@@ -24,6 +24,27 @@ log_error() {
     echo -e "${RED}[${LOG_PREFIX}]${NC} $*"
 }
 
+# pick_version reads GitHub's release list on stdin and prints the highest
+# version on a channel: "beta" considers every published release, "stable"
+# only tags without a pre-release suffix. The pre-release flag is ignored
+# because releases have not set it consistently, and the list is compared by
+# version because GitHub orders it by creation date.
+pick_version() {
+    local filter
+    case "$1" in
+        beta) filter='.' ;;
+        stable) filter='select(.tag_name | test("-") | not)' ;;
+        *) return 1 ;;
+    esac
+    jq -r "
+        def version_key: ltrimstr(\"v\") | split(\"-\") as \$p
+            | [(\$p[0] | split(\".\") | map(tonumber? // 0)),
+               (if (\$p | length) == 1 then [1]
+                else [0] + (\$p[1:] | join(\"-\") | split(\".\") | map(tonumber? // .)) end)];
+        [.[] | select(.draft | not) | $filter] | max_by(.tag_name | version_key) | .tag_name // empty
+    " | sed 's/^v//'
+}
+
 check_root() {
     if [ "$EUID" -ne 0 ]; then
         log_error "This script must be run as root"
@@ -69,6 +90,22 @@ EOF
     systemctl enable docker
     systemctl start docker
     log "Docker installed successfully"
+}
+
+# Railpack builds repositories that have neither a compose file nor a
+# Dockerfile. A failed install is not fatal: those builds report it instead.
+install_railpack() {
+    if command -v railpack &> /dev/null; then
+        log "Railpack is already installed"
+        return 0
+    fi
+
+    log "Installing Railpack..."
+    if curl -fsSL https://railpack.com/install.sh | RAILPACK_BIN_DIR=/usr/local/bin sh; then
+        log "Railpack installed successfully"
+    else
+        log_warn "Railpack could not be installed; deploying repositories without a Dockerfile will not work until it is"
+    fi
 }
 
 create_directories() {

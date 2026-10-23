@@ -229,6 +229,7 @@ main() {
         install)
             check_root
             install_docker
+            install_railpack
             stop_existing
             create_directories
             install_from_builds

@@ -34,8 +34,16 @@ curl -fsSL https://raw.githubusercontent.com/flatrun/installer/main/scripts/inst
 With a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/flatrun/installer/main/scripts/install.sh | sudo FLATRUN_VERSION=0.1.5 bash
+curl -fsSL https://raw.githubusercontent.com/flatrun/installer/main/scripts/install.sh | sudo FLATRUN_VERSION=0.4.0-beta.11 bash
 ```
+
+Without a version it installs the newest beta. For the newest stable release instead:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/flatrun/installer/main/scripts/install.sh | sudo FLATRUN_CHANNEL=stable bash
+```
+
+Run `tests/pick-version.sh` after changing how the version is picked.
 
 ## Development Testing
 
