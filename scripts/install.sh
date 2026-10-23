@@ -12,6 +12,7 @@ else
 fi
 
 FLATRUN_VERSION="${FLATRUN_VERSION:-latest}"
+FLATRUN_CHANNEL="${FLATRUN_CHANNEL:-beta}"
 AGENT_REPO="flatrun/agent"
 
 check_os() {
@@ -29,10 +30,10 @@ install_dependencies() {
 
 get_version() {
     if [ "$FLATRUN_VERSION" = "latest" ]; then
-        log "Fetching latest version..."
-        FLATRUN_VERSION=$(curl -sL "https://api.github.com/repos/$AGENT_REPO/releases/latest" | jq -r '.tag_name' | sed 's/^v//')
-        if [ -z "$FLATRUN_VERSION" ] || [ "$FLATRUN_VERSION" = "null" ]; then
-            log_error "Could not determine latest version"
+        log "Fetching the latest $FLATRUN_CHANNEL version..."
+        FLATRUN_VERSION=$(curl -fsSL "https://api.github.com/repos/$AGENT_REPO/releases?per_page=100" | pick_version "$FLATRUN_CHANNEL" || true)
+        if [ -z "$FLATRUN_VERSION" ]; then
+            log_error "Could not determine the latest $FLATRUN_CHANNEL version (FLATRUN_CHANNEL is beta or stable)"
             exit 1
         fi
     fi

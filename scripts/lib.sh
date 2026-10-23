@@ -24,6 +24,20 @@ log_error() {
     echo -e "${RED}[${LOG_PREFIX}]${NC} $*"
 }
 
+# pick_version reads GitHub's release list on stdin and prints the newest
+# version on a channel: "beta" is the newest published release, "stable" the
+# newest whose tag has no pre-release suffix. The pre-release flag is ignored
+# because releases have not set it consistently.
+pick_version() {
+    local filter
+    case "$1" in
+        beta) filter='.' ;;
+        stable) filter='select(.tag_name | test("-") | not)' ;;
+        *) return 1 ;;
+    esac
+    jq -r "[.[] | select(.draft | not) | $filter][0].tag_name // empty" | sed 's/^v//'
+}
+
 check_root() {
     if [ "$EUID" -ne 0 ]; then
         log_error "This script must be run as root"
