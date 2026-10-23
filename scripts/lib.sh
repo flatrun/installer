@@ -24,10 +24,11 @@ log_error() {
     echo -e "${RED}[${LOG_PREFIX}]${NC} $*"
 }
 
-# pick_version reads GitHub's release list on stdin and prints the newest
-# version on a channel: "beta" is the newest published release, "stable" the
-# newest whose tag has no pre-release suffix. The pre-release flag is ignored
-# because releases have not set it consistently.
+# pick_version reads GitHub's release list on stdin and prints the highest
+# version on a channel: "beta" considers every published release, "stable"
+# only tags without a pre-release suffix. The pre-release flag is ignored
+# because releases have not set it consistently, and the list is compared by
+# version because GitHub orders it by creation date.
 pick_version() {
     local filter
     case "$1" in
@@ -35,7 +36,13 @@ pick_version() {
         stable) filter='select(.tag_name | test("-") | not)' ;;
         *) return 1 ;;
     esac
-    jq -r "[.[] | select(.draft | not) | $filter][0].tag_name // empty" | sed 's/^v//'
+    jq -r "
+        def version_key: ltrimstr(\"v\") | split(\"-\") as \$p
+            | [(\$p[0] | split(\".\") | map(tonumber? // 0)),
+               (if (\$p | length) == 1 then [1]
+                else [0] + (\$p[1:] | join(\"-\") | split(\".\") | map(tonumber? // .)) end)];
+        [.[] | select(.draft | not) | $filter] | max_by(.tag_name | version_key) | .tag_name // empty
+    " | sed 's/^v//'
 }
 
 check_root() {
