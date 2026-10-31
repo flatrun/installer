@@ -64,4 +64,4 @@ runcmd:
 
 final_message: |
   FlatRun is ready!
-  Complete setup at: http://$PUBLIC_IP:8080/setup
+  Open an SSH tunnel to 127.0.0.1:8080, then complete setup at http://127.0.0.1:8080/setup

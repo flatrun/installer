@@ -77,13 +77,14 @@ rm -rf "$TMP_DIR"
 log "Creating UI container configuration..."
 cat > "$UI_DIR/nginx.conf" << 'NGINXCONF'
 server {
-    listen 80;
+    listen 127.0.0.1:8080;
     server_name _;
     root /usr/share/nginx/html;
     index index.html;
 
     location /api {
-        proxy_pass http://host.docker.internal:8090;
+        proxy_pass http://127.0.0.1:8090;
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -105,27 +106,30 @@ services:
     image: nginx:alpine
     container_name: flatrun-ui
     restart: unless-stopped
-    ports:
-      - "8080:80"
+    network_mode: host
     volumes:
       - ./html:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 COMPOSE
 
 log "Creating default configuration..."
+PRIVATE_HOST=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)
+if [[ ! "$PRIVATE_HOST" =~ ^[0-9a-fA-F:.]+$ ]]; then PRIVATE_HOST=""; fi
 JWT_SECRET=$(openssl rand -hex 32)
 cat > "$CONFIG_DIR/config.yml" << EOF
+config_version: 2
+security_reviews:
+  state_path: /var/lib/flatrun/security-reviews
+
 deployments_path: $DEPLOYMENTS_DIR
 docker_socket: unix:///var/run/docker.sock
 
 api:
-  host: 0.0.0.0
+  host: 127.0.0.1
+  private_host: "${PRIVATE_HOST}"
   port: 8090
-  enable_cors: true
-  allowed_origins:
-    - "*"
+  enable_cors: false
+  allowed_origins: []
 
 auth:
   enabled: true

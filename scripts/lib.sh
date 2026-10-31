@@ -120,19 +120,26 @@ create_directories() {
 create_config() {
     local log_level="${1:-info}"
     local jwt_secret
+    local private_host
+    private_host=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)
+    if [[ ! "$private_host" =~ ^[0-9a-fA-F:.]+$ ]]; then private_host=""; fi
     jwt_secret=$(openssl rand -hex 32)
     log "Creating configuration..."
     if [ ! -f "$CONFIG_DIR/config.yml" ]; then
         cat > "$CONFIG_DIR/config.yml" << EOF
+config_version: 2
+security_reviews:
+  state_path: /var/lib/flatrun/security-reviews
+
 deployments_path: $DEPLOYMENTS_DIR
 docker_socket: unix:///var/run/docker.sock
 
 api:
-  host: 0.0.0.0
+  host: 127.0.0.1
+  private_host: "${private_host}"
   port: 8090
-  enable_cors: true
-  allowed_origins:
-    - "*"
+  enable_cors: false
+  allowed_origins: []
 
 auth:
   enabled: true
@@ -188,6 +195,35 @@ deploy_infrastructure() {
     fi
 }
 
+update_ui_image() {
+    local compose_file="$1" image="$2" updated backup
+    updated=$(mktemp "${compose_file}.image.XXXXXX") || return 1
+    if ! awk -v image="$image" '
+        /^services:[[:space:]]*$/ { services = 1 }
+        services && /^  ui:[[:space:]]*$/ { in_ui = 1; print; next }
+        in_ui && /^  [^[:space:]#][^:]*:/ { in_ui = 0 }
+        in_ui && /^[^[:space:]#]/ { in_ui = 0 }
+        in_ui && /^    image:[[:space:]]*/ {
+            match($0, /^[[:space:]]*/)
+            print substr($0, 1, RLENGTH) "image: " image
+            changed++
+            next
+        }
+        { print }
+        END { if (changed != 1) exit 1 }
+    ' "$compose_file" > "$updated"; then
+        rm -f "$updated"
+        log_error "Cannot update the UI image without changing an unsupported compose structure"
+        return 1
+    fi
+    backup=$(mktemp "${compose_file}.before-image-upgrade.XXXXXX") || return 1
+    cp -p "$compose_file" "$backup" || return 1
+    chmod --reference="$compose_file" "$updated" || return 1
+    chown --reference="$compose_file" "$updated" || return 1
+    mv "$updated" "$compose_file" || return 1
+    log "Previous UI configuration saved to $backup"
+}
+
 deploy_ui() {
     local ui_dir="$DEPLOYMENTS_DIR/ui"
     local image="${FLATRUN_UI_IMAGE:-}"
@@ -201,7 +237,39 @@ deploy_ui() {
         image="ghcr.io/flatrun/ui:${tag}"
     fi
 
+    if [[ ! "$image" =~ ^[a-zA-Z0-9][a-zA-Z0-9._:/@-]*$ ]]; then
+        log_error "Invalid UI image reference"
+        return 1
+    fi
+    if [ -f "$ui_dir/docker-compose.yml" ]; then
+        log_warn "Preserving existing UI listener configuration. Review management exposure before changing it."
+        update_ui_image "$ui_dir/docker-compose.yml" "$image" || return 1
+        docker compose -f "$ui_dir/docker-compose.yml" up -d
+        return
+    fi
     mkdir -p "$ui_dir"
+
+    cat > "$ui_dir/nginx.conf" << 'NGINX'
+server {
+    listen ${MANAGEMENT_LISTEN};
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+    location /api {
+        proxy_pass ${AGENT_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+NGINX
 
     cat > "$ui_dir/docker-compose.yml" << COMPOSE
 name: ui
@@ -211,10 +279,13 @@ services:
     container_name: flatrun-ui
     restart: unless-stopped
     pull_policy: always
-    ports:
-      - "8080:80"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    network_mode: host
+    volumes:
+      - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
+    environment:
+      AGENT_URL: http://127.0.0.1:8090
+      MANAGEMENT_LISTEN: 127.0.0.1:8080
+      NGINX_ENVSUBST_FILTER: "^(AGENT_URL|MANAGEMENT_LISTEN)$"
 COMPOSE
 
     log "Starting UI container (${image})..."

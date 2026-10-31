@@ -29,8 +29,6 @@ ufw default allow outgoing
 ufw allow 22/tcp comment 'SSH'
 ufw allow 80/tcp comment 'HTTP'
 ufw allow 443/tcp comment 'HTTPS'
-ufw allow 8080/tcp comment 'FlatRun Dashboard'
-ufw allow 8090/tcp comment 'FlatRun Agent API'
 ufw --force enable
 
 log "UFW firewall configured"
