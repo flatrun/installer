@@ -6,11 +6,11 @@ Installation and image-building scripts for FlatRun.
 
 The installer sets up three services:
 
-- **Agent** (`:8090`) — FlatRun agent API, runs as a systemd service
-- **Nginx** (`:80`, `:443`) — Reverse proxy for deployments, runs as Docker container via `flatrun-agent setup infra nginx`
-- **UI** (`:8080`) — Dashboard SPA, runs as Docker container with nginx serving static files and proxying `/api` to the agent
+- **Agent** (`:8090`): FlatRun agent API, runs as a systemd service
+- **Nginx** (`:80`, `:443`): Reverse proxy for deployments, runs as Docker container via `flatrun-agent setup infra nginx`
+- **UI** (`:8080`): Dashboard SPA, runs as Docker container with nginx serving static files and proxying `/api` to the agent
 
-No system nginx is used — all HTTP traffic is handled by Docker containers.
+No system nginx is used: all HTTP traffic is handled by Docker containers.
 
 ## Scripts
 
@@ -127,9 +127,9 @@ vagrant destroy -f && vagrant up
 
 ### Access FlatRun
 
-- Dashboard: http://VM_IP:8080
-- Setup wizard: http://VM_IP:8080/setup
-- API: http://VM_IP:8090/api
+- Dashboard through an SSH tunnel: http://127.0.0.1:8080
+- Setup wizard through an SSH tunnel: http://127.0.0.1:8080/setup
+- API through the dashboard tunnel: http://127.0.0.1:8080/api
 
 ## Building Cloud Images
 
@@ -191,5 +191,19 @@ docker network ls                      # Networks
 
 - Ubuntu 22.04 or Debian 12+
 - Root/sudo access
-- Ports 80, 443, 8080, 8090 available
+- Public application ports 80 and 443, with local management ports 8080 and 8090 available
 - Docker CE (installed automatically by install.sh)
+
+## Private management
+
+Fresh installations use configuration version 2. The dashboard listens on loopback. The agent requires authentication and listens on loopback plus a discovered private Docker interface for local proxy communication. Public applications keep their proxy routes.
+
+Open an SSH tunnel before setup:
+
+```sh
+ssh -L 8080:127.0.0.1:8080 user@server
+```
+
+Then open `http://127.0.0.1:8080/setup`. The CLI can use the same forwarded dashboard address for API access. A VPN or explicitly configured private interface is another administration route; authentication still applies.
+
+Upgrades preserve existing agent and dashboard listener configuration. Review the agent's management migration preview before changing a legacy listener. Public management requires explicit configuration. New firewall setup does not allow public dashboard or agent ports.

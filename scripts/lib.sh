@@ -120,19 +120,26 @@ create_directories() {
 create_config() {
     local log_level="${1:-info}"
     local jwt_secret
+    local private_host
+    private_host=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)
+    if [[ ! "$private_host" =~ ^[0-9a-fA-F:.]+$ ]]; then private_host=""; fi
     jwt_secret=$(openssl rand -hex 32)
     log "Creating configuration..."
     if [ ! -f "$CONFIG_DIR/config.yml" ]; then
         cat > "$CONFIG_DIR/config.yml" << EOF
+config_version: 2
+security_reviews:
+  state_path: /var/lib/flatrun/security-reviews
+
 deployments_path: $DEPLOYMENTS_DIR
 docker_socket: unix:///var/run/docker.sock
 
 api:
-  host: 0.0.0.0
+  host: 127.0.0.1
+  private_host: "${private_host}"
   port: 8090
-  enable_cors: true
-  allowed_origins:
-    - "*"
+  enable_cors: false
+  allowed_origins: []
 
 auth:
   enabled: true
@@ -190,6 +197,11 @@ deploy_infrastructure() {
 
 deploy_ui() {
     local ui_dir="$DEPLOYMENTS_DIR/ui"
+    if [ -f "$ui_dir/docker-compose.yml" ]; then
+        log_warn "Preserving existing UI listener configuration. Review management exposure before changing it."
+        docker compose -f "$ui_dir/docker-compose.yml" up -d
+        return
+    fi
     local image="${FLATRUN_UI_IMAGE:-}"
 
     if [ -z "$image" ]; then
@@ -203,6 +215,27 @@ deploy_ui() {
 
     mkdir -p "$ui_dir"
 
+    cat > "$ui_dir/nginx.conf" << 'NGINX'
+server {
+    listen 127.0.0.1:8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+    location /api {
+        proxy_pass http://127.0.0.1:8090;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+NGINX
+
     cat > "$ui_dir/docker-compose.yml" << COMPOSE
 name: ui
 services:
@@ -211,10 +244,12 @@ services:
     container_name: flatrun-ui
     restart: unless-stopped
     pull_policy: always
-    ports:
-      - "8080:80"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    network_mode: host
+    volumes:
+      - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
+    environment:
+      AGENT_URL: http://127.0.0.1:8090
+      MANAGEMENT_LISTEN: 127.0.0.1:8080
 COMPOSE
 
     log "Starting UI container (${image})..."
