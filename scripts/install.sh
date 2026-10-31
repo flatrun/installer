@@ -86,7 +86,7 @@ print_success() {
     echo -e "${GREEN}  FlatRun installed successfully!${NC}"
     echo -e "${GREEN}============================================${NC}"
     echo ""
-    echo "  Open a tunnel: ssh -L 8080:127.0.0.1:8080 ${USER}@${ip}"
+    echo "  Open a tunnel: ssh -L 8080:127.0.0.1:8080 ${SUDO_USER:-$USER}@${ip}"
     echo -e "  Complete setup at: ${BLUE}http://127.0.0.1:8080/setup${NC}"
     echo ""
     echo -e "  Version: ${FLATRUN_VERSION}"

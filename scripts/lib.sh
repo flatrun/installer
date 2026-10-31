@@ -195,13 +195,37 @@ deploy_infrastructure() {
     fi
 }
 
+update_ui_image() {
+    local compose_file="$1" image="$2" updated backup
+    updated=$(mktemp "${compose_file}.image.XXXXXX") || return 1
+    if ! awk -v image="$image" '
+        /^services:[[:space:]]*$/ { services = 1 }
+        services && /^  ui:[[:space:]]*$/ { in_ui = 1; print; next }
+        in_ui && /^  [^[:space:]#][^:]*:/ { in_ui = 0 }
+        in_ui && /^[^[:space:]#]/ { in_ui = 0 }
+        in_ui && /^    image:[[:space:]]*/ {
+            match($0, /^[[:space:]]*/)
+            print substr($0, 1, RLENGTH) "image: " image
+            changed++
+            next
+        }
+        { print }
+        END { if (changed != 1) exit 1 }
+    ' "$compose_file" > "$updated"; then
+        rm -f "$updated"
+        log_error "Cannot update the UI image without changing an unsupported compose structure"
+        return 1
+    fi
+    backup=$(mktemp "${compose_file}.before-image-upgrade.XXXXXX") || return 1
+    cp -p "$compose_file" "$backup" || return 1
+    chmod --reference="$compose_file" "$updated" || return 1
+    chown --reference="$compose_file" "$updated" || return 1
+    mv "$updated" "$compose_file" || return 1
+    log "Previous UI configuration saved to $backup"
+}
+
 deploy_ui() {
     local ui_dir="$DEPLOYMENTS_DIR/ui"
-    if [ -f "$ui_dir/docker-compose.yml" ]; then
-        log_warn "Preserving existing UI listener configuration. Review management exposure before changing it."
-        docker compose -f "$ui_dir/docker-compose.yml" up -d
-        return
-    fi
     local image="${FLATRUN_UI_IMAGE:-}"
 
     if [ -z "$image" ]; then
@@ -213,16 +237,27 @@ deploy_ui() {
         image="ghcr.io/flatrun/ui:${tag}"
     fi
 
+    if [[ ! "$image" =~ ^[a-zA-Z0-9][a-zA-Z0-9._:/@-]*$ ]]; then
+        log_error "Invalid UI image reference"
+        return 1
+    fi
+    if [ -f "$ui_dir/docker-compose.yml" ]; then
+        log_warn "Preserving existing UI listener configuration. Review management exposure before changing it."
+        update_ui_image "$ui_dir/docker-compose.yml" "$image" || return 1
+        docker compose -f "$ui_dir/docker-compose.yml" up -d
+        return
+    fi
     mkdir -p "$ui_dir"
 
     cat > "$ui_dir/nginx.conf" << 'NGINX'
 server {
-    listen 127.0.0.1:8080;
+    listen ${MANAGEMENT_LISTEN};
     server_name _;
     root /usr/share/nginx/html;
     index index.html;
     location /api {
-        proxy_pass http://127.0.0.1:8090;
+        proxy_pass ${AGENT_URL};
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -250,6 +285,7 @@ services:
     environment:
       AGENT_URL: http://127.0.0.1:8090
       MANAGEMENT_LISTEN: 127.0.0.1:8080
+      NGINX_ENVSUBST_FILTER: "^(AGENT_URL|MANAGEMENT_LISTEN)$"
 COMPOSE
 
     log "Starting UI container (${image})..."
